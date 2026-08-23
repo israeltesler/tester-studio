@@ -2,6 +2,31 @@
 
 Repository for Cursor Cloud Agents and MCP integrations.
 
+## Important: two different GitHub connections
+
+Cursor has **two separate** GitHub setups. If GitHub does not show as connected, check both:
+
+| What you see in Cursor | What it is | Where to configure |
+| --- | --- | --- |
+| **Integrations → GitHub connected** | OAuth app access for repos, Cloud Agents, PRs | [cursor.com/dashboard](https://cursor.com/dashboard) → Integrations |
+| **Tools & MCP → github (green dot)** | GitHub MCP tools in chat/agent | `.cursor/mcp.json` + MCP dropdown in [cursor.com/agents](https://cursor.com/agents) |
+
+`mcp.json` alone does **not** make the dashboard show "GitHub connected".
+
+## Connect GitHub OAuth (dashboard)
+
+1. Open [cursor.com/dashboard](https://cursor.com/dashboard) in an incognito window.
+2. Sign in with the **same Cursor account** you use in the IDE.
+3. Go to **Integrations** and click **Connect** next to GitHub.
+4. Authorize as **israeltesler** and allow access to `tester-studio`.
+5. Confirm the dashboard shows your GitHub username and repositories.
+
+If Connect fails or shows the wrong account:
+
+1. On GitHub: **Settings → Applications** → revoke Cursor under **Authorized OAuth Apps** and **Installed GitHub Apps** for every GitHub account you own.
+2. Clear cookies for `cursor.com`, or use incognito.
+3. Reconnect from the dashboard.
+
 ## GitHub MCP (israeltesler)
 
 This project connects the official [GitHub MCP server](https://github.com/github/github-mcp-server) to the `israeltesler` GitHub account.
