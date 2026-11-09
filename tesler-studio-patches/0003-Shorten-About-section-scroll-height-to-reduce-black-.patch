@@ -1,0 +1,26 @@
+From e845b341e79d2b660023434fac6b976c00f9c717 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 9 Nov 2026 19:48:00 +0000
+Subject: [PATCH 3/3] Shorten About section scroll height to reduce black gap
+ before works
+
+---
+ components/landing/home-landing.tsx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/components/landing/home-landing.tsx b/components/landing/home-landing.tsx
+index 10f090e..3c55327 100644
+--- a/components/landing/home-landing.tsx
++++ b/components/landing/home-landing.tsx
+@@ -635,7 +635,7 @@ function AboutSection(): ReactNode {
+       id="about"
+       className="relative isolate bg-[#0C0C0C] px-5 py-8 sm:px-8 sm:py-10 md:px-10"
+       style={{
+-        minHeight: `calc(56vh + ${Math.min(words.length, 28) * 0.55}vh)`,
++        minHeight: `calc(44vh + ${Math.min(words.length, 18) * 0.42}vh)`,
+       }}
+     >
+       <div className="sticky top-[10vh] mx-auto w-full max-w-3xl px-5 sm:px-8 md:px-10">
+-- 
+2.43.0
+

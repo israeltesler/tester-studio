@@ -1,0 +1,241 @@
+From 1a8765fcdb05bf6c79aa09f7db0bf1d086f14699 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 9 Nov 2026 19:47:21 +0000
+Subject: [PATCH 2/3] Fix hero globe alignment, marquee motion, services RTL
+ layout, and scroll dead zone
+
+Center rising headline on the globe, shorten the About scroll dead zone that
+showed as a black gap, restore marquee auto-scroll with local images and Lenis
+scroll sync, and fix home/services card layout under RTL by scoping responsive
+grid rules and using LTR positioning for the stack.
+---
+ app/globals.css                        | 10 +++-
+ components/landing/home-landing.tsx    | 65 +++++++++++++++-----------
+ components/layout/smooth-scroll.tsx    |  4 ++
+ components/services/services-stack.tsx |  7 +--
+ styles/cinematic-earth.css             |  2 +-
+ 5 files changed, 56 insertions(+), 32 deletions(-)
+
+diff --git a/app/globals.css b/app/globals.css
+index 46d186c..a105cec 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -1028,17 +1028,23 @@ body:has(.creator-page) .site-corner {
+ }
+ 
+ @media (min-width: 1024px) {
+-  .services-stack-grid {
++  .services-stack-grid--page {
+     height: min(62vh, 680px);
+     width: min(90vw, calc(min(62vh, 680px) * var(--stack-aspect, 1.427)));
+     min-height: min(62vh, 680px);
+     aspect-ratio: auto;
+     transform: translateX(-2rem);
+   }
++
++  .services-stack-grid--home {
++    width: min(92vw, 760px);
++    min-height: min(52vh, 420px);
++    transform: none;
++  }
+ }
+ 
+ @media (min-width: 1280px) {
+-  .services-stack-grid {
++  .services-stack-grid--page {
+     height: min(64vh, 700px);
+     width: min(90vw, calc(min(64vh, 700px) * var(--stack-aspect, 1.427)));
+     min-height: min(64vh, 700px);
+diff --git a/components/landing/home-landing.tsx b/components/landing/home-landing.tsx
+index 015c73e..10f090e 100644
+--- a/components/landing/home-landing.tsx
++++ b/components/landing/home-landing.tsx
+@@ -57,7 +57,7 @@ export function HomeLanding(): ReactNode {
+   return (
+     <main
+       id="main-content"
+-      className="creator-page overflow-x-clip bg-[#0a0a0a]"
++      className="creator-page overflow-x-hidden bg-[#0a0a0a]"
+     >
+       <CinematicEarthPreload />
+       <HeroSection
+@@ -389,13 +389,12 @@ function HeroRisingHeadline({
+         window.innerWidth * 0.92,
+         stageHeight * 0.78
+       );
+-      const globeCenterY = stageHeight * 0.5;
+ 
+       setMotionConfig({
+-        startX: -(window.innerWidth * 0.28),
+-        startY: globeDiameter * 0.42,
+-        maxWidth: globeDiameter * 0.7,
+-        anchorTop: (globeCenterY / stageHeight) * 100 - 6,
++        startX: 0,
++        startY: Math.round(globeDiameter * 0.48),
++        maxWidth: Math.min(globeDiameter * 0.78, window.innerWidth * 0.88),
++        anchorTop: 50,
+       });
+     };
+ 
+@@ -540,7 +539,7 @@ function MarqueeSection(): ReactNode {
+   return (
+     <section
+       ref={sectionRef}
+-      className="relative z-20 overflow-hidden bg-[#0a0a0a] px-0 pt-2 pb-8 sm:pb-10"
++      className="relative z-20 min-h-[280px] overflow-hidden bg-[#0a0a0a] px-0 pt-6 pb-10 sm:min-h-[320px] sm:pb-12"
+       aria-label="עבודות נבחרות"
+     >
+       <MarqueeStrip sectionRef={sectionRef} />
+@@ -553,39 +552,51 @@ function MarqueeStrip({
+ }: {
+   sectionRef: RefObject<HTMLElement | null>;
+ }): ReactNode {
+-  const { scrollYProgress } = useScroll({
+-    target: sectionRef,
+-    offset: ["start end", "end start"],
+-  });
+-  const row1X = useTransform(scrollYProgress, [0, 1], [-220, 220]);
+-  const row2X = useTransform(scrollYProgress, [0, 1], [220, -220]);
++  const [offset, setOffset] = useState(0);
++
++  useEffect(() => {
++    const update = (): void => {
++      const section = sectionRef.current;
++      if (!section) return;
++      const sectionTop = section.getBoundingClientRect().top + window.scrollY;
++      setOffset((window.scrollY - sectionTop + window.innerHeight) * 0.3);
++    };
++
++    update();
++    window.addEventListener("scroll", update, { passive: true });
++    window.addEventListener("resize", update);
++
++    return () => {
++      window.removeEventListener("scroll", update);
++      window.removeEventListener("resize", update);
++    };
++  }, [sectionRef]);
+ 
+   return (
+     <>
+-      <MarqueeRow
+-        images={MARQUEE_IMAGES.slice(0, 11)}
+-        scrollX={row1X}
+-        reverse={false}
+-      />
++      <MarqueeRow images={MARQUEE_IMAGES.slice(0, 11)} x={offset - 200} />
+       <div className="h-3" />
+-      <MarqueeRow images={MARQUEE_IMAGES.slice(11)} scrollX={row2X} reverse />
++      <MarqueeRow images={MARQUEE_IMAGES.slice(11)} x={-(offset - 200)} />
+     </>
+   );
+ }
+ 
+ function MarqueeRow({
+   images,
+-  scrollX,
++  x,
+   reverse = false,
+ }: {
+   images: readonly string[];
+-  scrollX: MotionValue<number>;
++  x: number;
+   reverse?: boolean;
+ }): ReactNode {
+   const repeated = [...images, ...images, ...images];
+   return (
+     <div className="marquee-row overflow-hidden">
+-      <motion.div className="w-max" style={{ x: scrollX }}>
++      <div
++        className="w-max"
++        style={{ transform: `translate3d(${x}px, 0, 0)`, willChange: "transform" }}
++      >
+         <div
+           className={`marquee-row__track flex w-max gap-3${reverse ? " marquee-row__track--reverse" : ""}`}
+         >
+@@ -596,13 +607,13 @@ function MarqueeRow({
+               alt=""
+               width={420}
+               height={270}
+-              loading="lazy"
++              loading="eager"
+               decoding="async"
+-              className="h-[190px] w-[296px] shrink-0 rounded-2xl object-cover sm:h-[230px] sm:w-[358px] md:h-[270px] md:w-[420px]"
++              className="h-[190px] w-[296px] shrink-0 rounded-2xl border border-white/10 bg-[#141414] object-cover sm:h-[230px] sm:w-[358px] md:h-[270px] md:w-[420px]"
+             />
+           ))}
+         </div>
+-      </motion.div>
++      </div>
+     </div>
+   );
+ }
+@@ -623,7 +634,9 @@ function AboutSection(): ReactNode {
+       ref={sectionRef}
+       id="about"
+       className="relative isolate bg-[#0C0C0C] px-5 py-8 sm:px-8 sm:py-10 md:px-10"
+-      style={{ minHeight: `calc(78vh + ${words.length * 1.5}vh)` }}
++      style={{
++        minHeight: `calc(56vh + ${Math.min(words.length, 28) * 0.55}vh)`,
++      }}
+     >
+       <div className="sticky top-[10vh] mx-auto w-full max-w-3xl px-5 sm:px-8 md:px-10">
+         <div className="flex flex-col items-center text-center">
+diff --git a/components/layout/smooth-scroll.tsx b/components/layout/smooth-scroll.tsx
+index 429e8fa..8842e40 100644
+--- a/components/layout/smooth-scroll.tsx
++++ b/components/layout/smooth-scroll.tsx
+@@ -32,6 +32,10 @@ export function SmoothScroll({
+ 
+     const lenis = new Lenis(LENIS_OPTIONS);
+ 
++    lenis.on("scroll", () => {
++      window.dispatchEvent(new Event("scroll"));
++    });
++
+     const syncLenisWithSplash = (): void => {
+       if (document.documentElement.dataset.splashActive !== undefined) {
+         lenis.stop();
+diff --git a/components/services/services-stack.tsx b/components/services/services-stack.tsx
+index d5ffbf9..5c7e5de 100644
+--- a/components/services/services-stack.tsx
++++ b/components/services/services-stack.tsx
+@@ -93,10 +93,11 @@ export function ServicesStack({
+         ) : null}
+ 
+         <div
+-          className="services-stack-grid relative mx-auto w-full max-w-[min(100%,760px)] px-2 sm:px-0 lg:max-w-none"
++          className={`services-stack-grid relative mx-auto w-full max-w-[min(100%,760px)] px-2 sm:px-0 lg:max-w-none ${isHome ? "services-stack-grid--home" : "services-stack-grid--page"}`}
++          dir="ltr"
+           style={{
+             aspectRatio: `${STACK_WIDTH} / ${STACK_HEIGHT}`,
+-            minHeight: isHome ? "min(58vh, 400px)" : "min(62vh, 420px)",
++            minHeight: isHome ? "min(52vh, 380px)" : "min(62vh, 420px)",
+             ["--stack-aspect" as string]: STACK_ASPECT,
+           }}
+           onMouseLeave={() => setActiveIndex(null)}
+@@ -125,7 +126,7 @@ export function ServicesStack({
+                 }
+                 style={{
+                   width: `${cardWidthPercent}%`,
+-                  right: `${xPercent}%`,
++                  left: `${xPercent}%`,
+                   top: `${yPercent}%`,
+                   zIndex: isActive ? 30 : index + 1,
+                 }}
+diff --git a/styles/cinematic-earth.css b/styles/cinematic-earth.css
+index c6c0c76..e9698d0 100644
+--- a/styles/cinematic-earth.css
++++ b/styles/cinematic-earth.css
+@@ -166,7 +166,7 @@
+ .hero-rising-headline-anchor {
+   position: absolute;
+   left: 50%;
+-  top: 48%;
++  top: 50%;
+   z-index: 15;
+   pointer-events: none;
+   transform: translate(-50%, -50%);
+-- 
+2.43.0
+

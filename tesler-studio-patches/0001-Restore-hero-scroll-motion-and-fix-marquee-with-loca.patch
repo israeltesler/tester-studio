@@ -1,0 +1,233 @@
+From 58b0a4eb94672aeccacba04b1971025fbe43ea5e Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 9 Nov 2026 19:11:43 +0000
+Subject: [PATCH 1/3] Restore hero scroll motion and fix marquee with local
+ project images
+
+The previous marquee and hero tweak regressed the experience: MotionSites
+assets stopped serving, headline copy sat at the hero bottom, and Lenis scroll
+sync no longer drove the works strip. This restores rising headline transforms,
+reverts Lenis to a stable RAF loop, combines CSS marquee motion with scroll
+parallax, and serves work thumbnails from public assets.
+---
+ components/landing/home-landing.tsx | 105 +++++++++++++---------------
+ components/layout/smooth-scroll.tsx |  11 ++-
+ 2 files changed, 55 insertions(+), 61 deletions(-)
+
+diff --git a/components/landing/home-landing.tsx b/components/landing/home-landing.tsx
+index 9b6174e..015c73e 100644
+--- a/components/landing/home-landing.tsx
++++ b/components/landing/home-landing.tsx
+@@ -32,37 +32,17 @@ import {
+ import { ServicesStack } from "@/components/services/services-stack";
+ import { siteContent } from "@/lib/site-content";
+ 
+-const ORIGINAL_MARQUEE_IMAGES = [
+-  "https://motionsites.ai/assets/hero-space-voyage-preview-eECLH3Yc.gif",
+-  "https://motionsites.ai/assets/hero-codenest-preview-Cgppc2qV.gif",
+-  "https://motionsites.ai/assets/hero-vex-ventures-preview-BczMFIiw.gif",
+-  "https://motionsites.ai/assets/hero-stellar-ai-v2-preview-DjvxjG3C.gif",
+-  "https://motionsites.ai/assets/hero-asme-preview-B_nGDnTP.gif",
+-  "https://motionsites.ai/assets/hero-transform-data-preview-Cx5OU29N.gif",
+-  "https://motionsites.ai/assets/hero-vitara-preview-Cjz2QYyU.gif",
+-  "https://motionsites.ai/assets/hero-terra-preview-BFjrCr7T.gif",
+-  "https://motionsites.ai/assets/hero-skyelite-preview-DHaZIgUv.gif",
+-  "https://motionsites.ai/assets/hero-aethera-preview-DknSlcTa.gif",
+-  "https://motionsites.ai/assets/hero-designpro-preview-D8c5_een.gif",
+-  "https://motionsites.ai/assets/hero-stellar-ai-preview-D3HL6bw1.gif",
+-  "https://motionsites.ai/assets/hero-xportfolio-preview-D4A8maiC.gif",
+-  "https://motionsites.ai/assets/hero-orbit-web3-preview-BXt4OttD.gif",
+-  "https://motionsites.ai/assets/hero-nexora-preview-cx5HmUgo.gif",
+-  "https://motionsites.ai/assets/hero-evr-ventures-preview-DZxeVFEX.gif",
+-  "https://motionsites.ai/assets/hero-planet-orbit-preview-DWAP8Z1P.gif",
+-  "https://motionsites.ai/assets/hero-new-era-preview-CocuDUm9.gif",
+-  "https://motionsites.ai/assets/hero-wealth-preview-B70idl_u.gif",
+-  "https://motionsites.ai/assets/hero-luminex-preview-CxOP7ce6.gif",
+-  "https://motionsites.ai/assets/hero-celestia-preview-0yO3jXO8.gif",
++const LOCAL_WORK_IMAGES = [
++  COHEN_CO_IMAGE,
++  ROMEMA_IMAGE,
++  "/hero-background.png",
++  "/josh.webp",
++  "/josh_wave.webp",
+ ] as const;
+ 
+-const MARQUEE_IMAGES = PROJECTS_PAGE_ENABLED
+-  ? ORIGINAL_MARQUEE_IMAGES.map((src, index) => {
+-      if (index === 0) return COHEN_CO_IMAGE;
+-      if (index === 11) return ROMEMA_IMAGE;
+-      return src;
+-    })
+-  : ORIGINAL_MARQUEE_IMAGES;
++const MARQUEE_IMAGES = Array.from({ length: 21 }, (_, index) => {
++  return LOCAL_WORK_IMAGES[index % LOCAL_WORK_IMAGES.length]!;
++});
+ 
+ const HERO_LOGO_SCROLL: [number, number] = [0, 0.55];
+ const HERO_HEADLINE_SCROLL: [number, number] = [0, 0.85];
+@@ -413,9 +393,9 @@ function HeroRisingHeadline({
+ 
+       setMotionConfig({
+         startX: -(window.innerWidth * 0.28),
+-        startY: stageHeight * 0.2,
++        startY: globeDiameter * 0.42,
+         maxWidth: globeDiameter * 0.7,
+-        anchorTop: (globeCenterY / stageHeight) * 100,
++        anchorTop: (globeCenterY / stageHeight) * 100 - 6,
+       });
+     };
+ 
+@@ -431,14 +411,14 @@ function HeroRisingHeadline({
+   const x = useTransform(
+     progress,
+     HERO_HEADLINE_SCROLL,
+-    [motionConfig.startX * 0.15, 0]
++    [motionConfig.startX, 0]
+   );
+   const y = useTransform(
+     progress,
+     HERO_HEADLINE_SCROLL,
+-    [motionConfig.startY * 0.12, 0]
++    [motionConfig.startY, 0]
+   );
+-  const scale = useTransform(progress, HERO_HEADLINE_SCROLL, [0.92, 1]);
++  const scale = useTransform(progress, HERO_HEADLINE_SCROLL, [0.24, 1]);
+   const totalWords = lines.reduce(
+     (count, line) => count + line.split(/\s+/).filter(Boolean).length,
+     0
+@@ -506,8 +486,8 @@ function HeroAnimatedWord({
+   const span = rangeEnd - rangeStart;
+   const start = rangeStart + (index / total) * span;
+   const end = rangeStart + ((index + 1) / total) * span;
+-  const opacity = useTransform(progress, [0, start, end], [1, 1, 1]);
+-  const y = useTransform(progress, [0, start, end], [0, 0, 0]);
++  const opacity = useTransform(progress, [0, start, end], [0, 0, 1]);
++  const y = useTransform(progress, [0, start, end], [18, 18, 0]);
+ 
+   return (
+     <motion.span style={{ opacity, y }} className="hero-rising-headline__word">
+@@ -569,45 +549,60 @@ function MarqueeSection(): ReactNode {
+ }
+ 
+ function MarqueeStrip({
+-  sectionRef: _sectionRef,
++  sectionRef,
+ }: {
+   sectionRef: RefObject<HTMLElement | null>;
+ }): ReactNode {
++  const { scrollYProgress } = useScroll({
++    target: sectionRef,
++    offset: ["start end", "end start"],
++  });
++  const row1X = useTransform(scrollYProgress, [0, 1], [-220, 220]);
++  const row2X = useTransform(scrollYProgress, [0, 1], [220, -220]);
++
+   return (
+     <>
+-      <MarqueeRow images={MARQUEE_IMAGES.slice(0, 11)} reverse={false} />
++      <MarqueeRow
++        images={MARQUEE_IMAGES.slice(0, 11)}
++        scrollX={row1X}
++        reverse={false}
++      />
+       <div className="h-3" />
+-      <MarqueeRow images={MARQUEE_IMAGES.slice(11)} reverse />
++      <MarqueeRow images={MARQUEE_IMAGES.slice(11)} scrollX={row2X} reverse />
+     </>
+   );
+ }
+ 
+ function MarqueeRow({
+   images,
++  scrollX,
+   reverse = false,
+ }: {
+   images: readonly string[];
++  scrollX: MotionValue<number>;
+   reverse?: boolean;
+ }): ReactNode {
+   const repeated = [...images, ...images, ...images];
+   return (
+     <div className="marquee-row overflow-hidden">
+-      <div
+-        className={`marquee-row__track flex w-max gap-3${reverse ? " marquee-row__track--reverse" : ""}`}
+-      >
+-        {repeated.map((src, index) => (
+-          <img
+-            key={`${src}-${index}`}
+-            src={src}
+-            alt=""
+-            width={420}
+-            height={270}
+-            loading="lazy"
+-            decoding="async"
+-            className="h-[190px] w-[296px] shrink-0 rounded-2xl object-cover sm:h-[230px] sm:w-[358px] md:h-[270px] md:w-[420px]"
+-          />
+-        ))}
+-      </div>
++      <motion.div className="w-max" style={{ x: scrollX }}>
++        <div
++          className={`marquee-row__track flex w-max gap-3${reverse ? " marquee-row__track--reverse" : ""}`}
++        >
++          {repeated.map((src, index) => (
++            <img
++              key={`${src}-${index}`}
++              src={src}
++              alt=""
++              width={420}
++              height={270}
++              loading="lazy"
++              decoding="async"
++              className="h-[190px] w-[296px] shrink-0 rounded-2xl object-cover sm:h-[230px] sm:w-[358px] md:h-[270px] md:w-[420px]"
++            />
++          ))}
++        </div>
++      </motion.div>
+     </div>
+   );
+ }
+diff --git a/components/layout/smooth-scroll.tsx b/components/layout/smooth-scroll.tsx
+index ed21317..429e8fa 100644
+--- a/components/layout/smooth-scroll.tsx
++++ b/components/layout/smooth-scroll.tsx
+@@ -1,12 +1,10 @@
+ "use client";
+ 
+-import { cancelFrame, frame } from "motion/react";
+ import { useEffect, type ReactNode } from "react";
+ import Lenis from "lenis";
+ import { features } from "@/lib/config";
+ 
+ const LENIS_OPTIONS = {
+-  autoRaf: false,
+   duration: 1.6,
+   easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+   orientation: "vertical" as const,
+@@ -50,11 +48,12 @@ export function SmoothScroll({
+       attributeFilter: ["data-splash-active"],
+     });
+ 
+-    function updateLenis(data: { timestamp: number }): void {
+-      lenis.raf(data.timestamp);
++    function raf(time: number): void {
++      lenis.raf(time);
++      requestAnimationFrame(raf);
+     }
+ 
+-    frame.update(updateLenis, true);
++    const rafId = requestAnimationFrame(raf);
+ 
+     function handleAnchorClick(e: MouseEvent): void {
+       const target = e.target as HTMLElement;
+@@ -76,7 +75,7 @@ export function SmoothScroll({
+     return () => {
+       document.removeEventListener("click", handleAnchorClick);
+       splashObserver.disconnect();
+-      cancelFrame(updateLenis);
++      cancelAnimationFrame(rafId);
+       lenis.destroy();
+     };
+   }, []);
+-- 
+2.43.0
+
